@@ -21,44 +21,30 @@ SOFTWARE.
 */
 
 
-package newtree
+package ntops
 
-type TreeOps interface{
-	Consistent(p []byte, q interface{}) bool
-	
-	Union(P Elements) []byte
-	
-	Penalty(E1,E2 []byte) float64
-	
-	// The FirstSplit functions covers three cases.
-	// Given FirstSplit(P,maxsize) -> A,B
-	//
-	// - Case 1: P is small enough to fit in maxsize.
-	//           In this case, return P,nil
-	// - Case 2: P is small enough so that A and B can fit in maxsize each.
-	//           In this case, split P into A and B evenly.
-	// - Case 3: P is so large, that eighter only A or B can fit in maxsize.
-	//           In this case, return A,B so that A fits in maxsize.
-	//
-	// Given FirstSplit(P,maxsize) -> A,B   and .Sort() is implemented
-	//       P is sorted and A and B are assumed to be sorted.
-	FirstSplit(P Elements,maxsize int) (Elements,Elements)
-	
-	Sort(E Elements)
+import "github.com/vmihailenco/msgpack"
+import "bytes"
+import "sync"
+
+type decoder struct {
+	Buf bytes.Reader
+	Dec *msgpack.Decoder
 }
 
-type _fullSpec_TreeOps interface{
-	Overlap(p,q []byte) bool
-	Consistent(p []byte, q interface{}) bool
-	
-	Union(P Elements) []byte
-	
-	Penalty(E1,E2 []byte) float64
-	
-	FirstSplit(P Elements,maxsize int) (Elements,Elements)
-	
-	Sort(E Elements)
+var decpool = sync.Pool{ New: func()interface{} {
+	dec := new(decoder)
+	dec.Dec = msgpack.NewDecoder(&dec.Buf)
+	return dec
+}}
+
+func getdecoder() *decoder {
+	return decpool.Get().(*decoder)
 }
-
-
-
+func (d *decoder) free() {
+	decpool.Put(d)
+}
+func (d *decoder) reset(b []byte) {
+	d.Buf.Reset(b)
+	d.Dec.Reset(&d.Buf)
+}

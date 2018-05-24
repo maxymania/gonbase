@@ -23,8 +23,6 @@ SOFTWARE.
 
 package newtree
 
-//import "github.com/cznic/file"
-import "encoding/binary"
 import "errors"
 import "fmt"
 import "bytes"
@@ -41,18 +39,19 @@ func (e *Element) cleanse() { e.Tmp = nil; e.Ptr = 0 }
 func (e Element) Length() int { return len(e.Val)+12 }
 func (e *Element) BinDecode(b []byte) ([]byte,error) {
 	if len(b)<4 { return nil,EShort }
-	l := binary.BigEndian.Uint32(b)
+	l := frm.Uint32(b)
 	if len(b)<(int(l)+12) { return nil,EShort }
 	e.Val = b[4:l+4]
-	e.Ptr = int64(binary.BigEndian.Uint64(b[l+4:]))
+	e.Ptr = int64(frm.Uint64(b[l+4:]))
+	e.Tmp = nil
 	return b[l+12:],nil
 }
 func (e Element) BinEncode(b []byte) (int,error) {
 	lng := len(e.Val)+12
 	if lng > len(b) { return 0,EShort }
-	binary.BigEndian.PutUint32(b,uint32(len(e.Val)))
+	frm.PutUint32(b,uint32(len(e.Val)))
 	copy(b[4:],e.Val)
-	binary.BigEndian.PutUint64(b[lng-8:],uint64(e.Ptr))
+	frm.PutUint64(b[lng-8:],uint64(e.Ptr))
 	return lng,nil
 }
 func (e Element) String() string { return fmt.Sprintf("{%q %d}",e.Val,e.Ptr) }
@@ -82,9 +81,8 @@ func (e *Elements) resize32(l uint32) {
 }
 func (e *Elements) BinDecode(b []byte) ([]byte,error) {
 	if len(b)<4 { return nil,EShort }
-	l := binary.BigEndian.Uint32(b)
+	l := frm.Uint32(b)
 	e.resize32(l)
-	e.clear()
 	b = b[4:]
 	var err error
 	for i := range *e {
@@ -95,7 +93,7 @@ func (e *Elements) BinDecode(b []byte) ([]byte,error) {
 }
 func (e Elements) BinEncode(b []byte) (int,error) {
 	if len(b)<4 { return 0,EShort }
-	binary.BigEndian.PutUint32(b,uint32(len(e)))
+	frm.PutUint32(b,uint32(len(e)))
 	i := 4
 	for _,el := range e {
 		j,err := el.BinEncode(b[i:])
@@ -128,14 +126,14 @@ type Root struct{
 }
 func (r *Root) BinDecode(b []byte) error {
 	if len(b)<16 { return EShort }
-	r.Ptr = int64(binary.BigEndian.Uint64(b))
-	r.Depth = binary.BigEndian.Uint32(b[8:])
+	r.Ptr = int64(frm.Uint64(b))
+	r.Depth = frm.Uint32(b[8:])
 	return  nil
 }
 func (r Root) BinEncode(b []byte) error {
 	if len(b)<16 { return EShort }
-	binary.BigEndian.PutUint64(b,uint64(r.Ptr))
-	binary.BigEndian.PutUint32(b[8:],r.Depth)
+	frm.PutUint64(b,uint64(r.Ptr))
+	frm.PutUint32(b[8:],r.Depth)
 	return  nil
 }
 

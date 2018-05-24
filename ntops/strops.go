@@ -133,7 +133,24 @@ func (s StrOps) Penalty(E1,E2 []byte) float64 {
 	return 0
 }
 func (s StrOps) FirstSplit(P newtree.Elements,maxsize int) (newtree.Elements,newtree.Elements) {
-	s.Sort(P)
+	//s.Sort(P)
+	return firstSplitSorted(P,maxsize)
+}
+func (s StrOps) Sort(E newtree.Elements) {
+	k1 := strKeyNew()
+	k2 := strKeyNew()
+	defer k1.free()
+	defer k2.free()
+	sort.Slice(E,func(i,j int) bool {
+		err := msgpack.Unmarshal(E[i].Val,k1)
+		if err!=nil { return false }
+		err = msgpack.Unmarshal(E[j].Val,k2)
+		if err!=nil { return false }
+		return bytes.Compare(k1.Low,k2.Low)<0
+	})
+}
+
+func firstSplitSorted(P newtree.Elements,maxsize int) (newtree.Elements,newtree.Elements) {
 	z := 4
 	lng := P.Length()
 	if lng<=maxsize { return P,nil }
@@ -149,19 +166,6 @@ func (s StrOps) FirstSplit(P newtree.Elements,maxsize int) (newtree.Elements,new
 		}
 	}
 	return P,nil
-}
-func (s StrOps) Sort(E newtree.Elements) {
-	k1 := strKeyNew()
-	k2 := strKeyNew()
-	defer k1.free()
-	defer k2.free()
-	sort.Slice(E,func(i,j int) bool {
-		err := msgpack.Unmarshal(E[i].Val,k1)
-		if err!=nil { return false }
-		err = msgpack.Unmarshal(E[j].Val,k2)
-		if err!=nil { return false }
-		return bytes.Compare(k1.Low,k2.Low)<0
-	})
 }
 
 func korrektur(a,b newtree.Elements) (c,d newtree.Elements) {

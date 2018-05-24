@@ -101,6 +101,7 @@ func (t *Tree) insert(id int64,nitem []byte) (r_elems Elements, r_err error) {
 				sc = c
 			}
 		}
+		
 		s_elems,err := t.insert(node[sp].Ptr,nitem)
 		if err!=nil { r_err = err; return }
 		if len(s_elems)==0 {
@@ -113,9 +114,11 @@ func (t *Tree) insert(id int64,nitem []byte) (r_elems Elements, r_err error) {
 			node = append(node,s_elems[1:]...)
 		}
 	}
+	
+	//meterTime()
+	t.Ops.Sort(node)
 	{
 		cur,rest := t.Ops.FirstSplit(node,t.Page())
-		t.Ops.Sort(cur)
 		err = t.putPage(id,cur)
 		if err!=nil { r_err = err; return }
 		r_elems[0].Val = t.Ops.Union(cur)
@@ -172,7 +175,7 @@ func (t *Tree) search(
 	ctx context.Context,
 	id int64,
 	q interface{},
-	ch chan <- []byte) error {
+	consumer func([]byte)) error {
 	b,node,err := t.getPage(id)
 	defer freeElements(node)
 	defer b.Free()
@@ -180,15 +183,12 @@ func (t *Tree) search(
 	
 	for _,e := range node {
 		if t.Ops.Consistent(e.Val,q) {
+			err := ctx.Err()
+			if err!=nil { return err }
 			if e.Ptr == 0 {
-				select {
-				case ch <- e.Val:
-				case <- ctx.Done(): return ctx.Err()
-				}
+				consumer(e.Val)
 			} else {
-				err := ctx.Err()
-				if err!=nil { return err }
-				err = t.search(ctx,e.Ptr,q,ch)
+				err = t.search(ctx,e.Ptr,q,consumer)
 				if err!=nil { return err }
 			}
 		}
@@ -199,11 +199,45 @@ func (t *Tree) Search(
 	ctx context.Context,
 	obj int64,
 	q interface{},
-	ch chan <- []byte) error {
-	defer close(ch)
+	consumer func([]byte)) error {
 	rr,err := t.getRoot(obj)
 	if err!=nil { return err }
-	return t.search(ctx,rr.Ptr,q,ch)
+	return t.search(ctx,rr.Ptr,q,consumer)
+}
+
+/* -------------------------------------------------------------------------------- */
+
+func (t *Tree) gsearch(
+	ctx context.Context,
+	id int64,
+	q interface{},
+	consume func(b []byte) bool) error {
+	b,node,err := t.getPage(id)
+	defer freeElements(node)
+	defer b.Free()
+	if err!=nil { return err }
+	
+	for _,e := range node {
+		if t.Ops.Consistent(e.Val,q) {
+			sub := consume(e.Val)
+			if e.Ptr!=0 && sub {
+				err := ctx.Err()
+				if err!=nil { return err }
+				err = t.gsearch(ctx,e.Ptr,q,consume)
+				if err!=nil { return err }
+			}
+		}
+	}
+	return nil
+}
+func (t *Tree) GSearch(
+	ctx context.Context,
+	obj int64,
+	q interface{},
+	consume func(b []byte) bool) error {
+	rr,err := t.getRoot(obj)
+	if err!=nil { return err }
+	return t.gsearch(ctx,rr.Ptr,q,consume)
 }
 
 /* -------------------------------------------------------------------------------- */
@@ -251,6 +285,7 @@ func (t *Tree) delete(
 	}
 	
 	r_inner = len(node)
+	t.Ops.Sort(node)
 	{
 		cur,rest := t.Ops.FirstSplit(node,t.Page())
 		t.Ops.Sort(cur)

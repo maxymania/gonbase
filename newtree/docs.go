@@ -20,45 +20,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
+/*
+A generalized search tree (GiST) implementation with some modifications from
+the original algorithm. This implementation is based around a Fixed-Sized Page
+allocation, and a split algorithm with strong page-limitations.
 
+Unlike other GiST implementations, this one is designed to be a Table rather
+than just an Index.
+
+The GiST paper: http://db.cs.berkeley.edu/papers/vldb95-gist.pdf
+*/
 package newtree
-
-type TreeOps interface{
-	Consistent(p []byte, q interface{}) bool
-	
-	Union(P Elements) []byte
-	
-	Penalty(E1,E2 []byte) float64
-	
-	// The FirstSplit functions covers three cases.
-	// Given FirstSplit(P,maxsize) -> A,B
-	//
-	// - Case 1: P is small enough to fit in maxsize.
-	//           In this case, return P,nil
-	// - Case 2: P is small enough so that A and B can fit in maxsize each.
-	//           In this case, split P into A and B evenly.
-	// - Case 3: P is so large, that eighter only A or B can fit in maxsize.
-	//           In this case, return A,B so that A fits in maxsize.
-	//
-	// Given FirstSplit(P,maxsize) -> A,B   and .Sort() is implemented
-	//       P is sorted and A and B are assumed to be sorted.
-	FirstSplit(P Elements,maxsize int) (Elements,Elements)
-	
-	Sort(E Elements)
-}
-
-type _fullSpec_TreeOps interface{
-	Overlap(p,q []byte) bool
-	Consistent(p []byte, q interface{}) bool
-	
-	Union(P Elements) []byte
-	
-	Penalty(E1,E2 []byte) float64
-	
-	FirstSplit(P Elements,maxsize int) (Elements,Elements)
-	
-	Sort(E Elements)
-}
-
-
-
