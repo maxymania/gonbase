@@ -180,9 +180,7 @@ func (t *TSIndex) Lookup(k uint64) (uint64,[]byte) {
 	a,b := SplitOffSecond(t.Table.Get(Encode(k)))
 	return Decode(a),b
 }
-/*
-This function is flawed...
-*/
+
 func (t *TSIndex) Search(ctx context.Context,e uint64,ch chan <- TSRecord) error {
 	defer close(ch)
 	
@@ -211,19 +209,21 @@ func (t *TSIndex) Search(ctx context.Context,e uint64,ch chan <- TSRecord) error
 	
 	done := ctx.Done()
 	
-	for k,v := c.Seek(Encode(n.KRMin)); len(k)>0 && Decode(k)<=n.KRMax ; k,v = c.Next() {
-		ee,vv := SplitOffSecond(v)
-		E := Decode(ee)
-		if E<n.IRMin || n.IRMax<E {
-			if ctx.Err()==nil { continue }
-		} else {
-			select {
-			case ch <- TSRecord{Decode(k),E,vv}: continue
-			case <- done:
+	for _,e := range page.Elems {
+		for k,v := c.Seek(Encode(e.KRMin)); len(k)>0 && Decode(k)<=e.KRMax ; k,v = c.Next() {
+			ee,vv := SplitOffSecond(v)
+			E := Decode(ee)
+			if E<n.IRMin || n.IRMax<E {
+				if ctx.Err()==nil { continue }
+			} else {
+				select {
+				case ch <- TSRecord{Decode(k),E,vv}: continue
+				case <- done:
+				}
+				break
 			}
-			break
+			continue
 		}
-		continue
 	}
 	
 	return nil
