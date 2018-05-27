@@ -23,7 +23,7 @@ SOFTWARE.
 
 package nubrin
 
-import "github.com/coreos/bbolt" /* bolt */
+import "github.com/coreos/bbolt"
 import "github.com/vmihailenco/msgpack"
 import "context"
 import "sort"
