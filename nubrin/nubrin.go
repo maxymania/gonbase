@@ -259,9 +259,44 @@ func (t *TSIndex) deleteObject(ctx context.Context,page *BrinStruct,now uint64,c
 			if ctx.Err()!=nil {
 				/*
 				If we abort the loop, our new element is incomplete.
-				To fix this, we just copy the old one.
+				To fix this, we just copy the old one...
 				*/
+				motiv = node /* First, backup the incomplete one. */
 				node = e
+				
+				/*
+				...and modify it, so that the next .DeleteExpire() will avoid search-work,
+				that has already been done!
+				*/
+				
+				okrmin := node.KRMin
+				
+				if motiv.Count!=0 {
+					/* If we retained some Entries, we will have KRMin being set. */
+					node.KRMin = motiv.KRMin
+				} else {
+					/* Otherwise, we will adjust the KRMin based upon the current position. */
+					
+					/*
+					The current Record had been dropped, otherwise, we wheren't in this Else-clause.
+					So we're going to skip the current record as well.
+					*/
+					node.KRMin = Decode(k) + 1
+				}
+				
+				/* Finally, adjust the values to remain sane. */
+				
+				if node.KRMin < okrmin {
+					node.KRMin = okrmin
+				}
+				
+				if motiv.Count==0 {
+					subcnt := node.KRMin-okrmin
+					if subcnt < node.Count { node.Count -= subcnt } else { node.Count = 1 }
+				} else {
+					if motiv.Count < node.Count { node.Count -= motiv.Count } else { node.Count = 1 }
+				}
+				
 				break
 			}
 		}
