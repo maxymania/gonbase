@@ -23,7 +23,7 @@ SOFTWARE.
 
 package nubrin
 
-import "github.com/coreos/bbolt"
+import bolt "github.com/coreos/bbolt"
 import "github.com/vmihailenco/msgpack"
 import "context"
 import "sort"
@@ -228,6 +228,7 @@ func (t *TSIndex) Search(ctx context.Context,e uint64,ch chan <- TSRecord) error
 	
 	return nil
 }
+
 func (t *TSIndex) deleteObject(ctx context.Context,page *BrinStruct,now uint64,consumer func([]byte)) error {
 	cur := t.Table.Cursor()
 	
