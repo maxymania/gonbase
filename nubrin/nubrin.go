@@ -28,6 +28,11 @@ import "github.com/vmihailenco/msgpack"
 import "context"
 import "sort"
 
+type TSRecord struct{
+	K,E uint64
+	Value []byte
+}
+
 type TSIndex struct{
 	_extensible struct{}
 	
@@ -175,7 +180,10 @@ func (t *TSIndex) Lookup(k uint64) (uint64,[]byte) {
 	a,b := SplitOffSecond(t.Table.Get(Encode(k)))
 	return Decode(a),b
 }
-func (t *TSIndex) Search(ctx context.Context,e uint64,ch chan <- []byte) error {
+/*
+This function is flawed...
+*/
+func (t *TSIndex) Search(ctx context.Context,e uint64,ch chan <- TSRecord) error {
 	defer close(ch)
 	
 	k,v := t.Index.Cursor().Seek(Encode(e))
@@ -203,14 +211,14 @@ func (t *TSIndex) Search(ctx context.Context,e uint64,ch chan <- []byte) error {
 	
 	done := ctx.Done()
 	
-	for k,v := c.Seek(Encode(n.IRMin)); len(k)>0 ; k,v = c.Next() {
-		ee,_ := SplitOffSecond(v)
+	for k,v := c.Seek(Encode(n.KRMin)); len(k)>0 && Decode(k)<=n.KRMax ; k,v = c.Next() {
+		ee,vv := SplitOffSecond(v)
 		E := Decode(ee)
 		if E<n.IRMin || n.IRMax<E {
 			if ctx.Err()==nil { continue }
 		} else {
 			select {
-			case ch <- v: continue
+			case ch <- TSRecord{Decode(k),E,vv}: continue
 			case <- done:
 			}
 			break
