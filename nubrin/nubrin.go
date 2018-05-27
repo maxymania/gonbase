@@ -29,6 +29,8 @@ import "context"
 import "sort"
 
 type TSIndex struct{
+	_extensible struct{}
+	
 	Index,Table *bolt.Bucket
 	Mod   uint64
 }
@@ -90,7 +92,7 @@ func (t *TSIndex) process(e uint64,c *bolt.Cursor,page *BrinStruct) error {
 	}
 	
 	{
-		L := e-(e&t.Mod)
+		L := e-(e%t.Mod)
 		H := L + t.Mod
 		
 		page.Low   = one2zero(L+1)
@@ -218,5 +220,82 @@ func (t *TSIndex) Search(ctx context.Context,e uint64,ch chan <- []byte) error {
 	
 	return nil
 }
+func (t *TSIndex) deleteObject(ctx context.Context,page *BrinStruct,now uint64,consumer func([]byte)) error {
+	cur := t.Table.Cursor()
+	
+	for i,e := range page.Elems {
+		/*
+		We will rebuild every element as we go.
+		*/
+		var node,motiv BrinNode
+		
+		for k,v := cur.Seek(Encode(e.KRMin)); len(k)!=0 && Decode(k)<e.KRMax; k,v = cur.Next() {
+			ee,_ := SplitOffSecond(v)
+			E := Decode(ee)
+			if E <= now {
+				consumer(v)
+				if err := cur.Delete(); err!=nil { return err }
+			} else {
+				/*
+				At this point, we retain the record.
+				
+				Record every element within the suspected range.
+				*/
+				if page.Low<=E && E<=page.High {
+					motiv.Single(E,Decode(k))
+					node.remMerge(&motiv)
+				}
+			}
+			
+			if ctx.Err()!=nil {
+				/*
+				If we abort the loop, our new element is incomplete.
+				To fix this, we just copy the old one.
+				*/
+				node = e
+				break
+			}
+		}
+		page.Elems[i] = node
+		
+		/* If the inner loop exists, we need to exit the outer one as well. */
+		if ctx.Err()!=nil { break }
+	}
+	return nil
+}
 
+func (t *TSIndex) DeleteExpire(ctx context.Context,now uint64,consumer func([]byte)) error {
+	var page BrinStruct
+	
+	cur := t.Index.Cursor()
+	
+	lcbuf := make([]byte,0,9)
+	
+	for k,v := cur.First(); len(k)!=0 ; k,v = cur.Next() {
+		if ctx.Err()!=nil { break }
+		if err := msgpack.Unmarshal(v,&page); err!=nil { return err }
+		if now < page.Low { break }
+		err := t.deleteObject(ctx,&page,now,consumer)
+		if err!=nil { return err }
+		
+		page.Elems.minify()
+		
+		if len(page.Elems)==0 {
+			/*
+			Minify emptied-out the elements, meaning, that there is no indexed
+			record left. In this case, we will simply delete the Page...
+			*/
+			cur.Delete()
+		} else {
+			/*
+			...otherwise, we will write the Page back.
+			*/
+			data,err := msgpack.Marshal(v,&page)
+			if err!=nil { return err }
+			err = t.Index.Put(append(lcbuf,k...),data)
+			if err!=nil { return err }
+		}
+	}
+	return nil
+}
 

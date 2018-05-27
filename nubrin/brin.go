@@ -58,6 +58,18 @@ func (b *BrinNode) Merge(c *BrinNode) {
 	b.Count += c.Count
 }
 
+func (b *BrinNode) remMerge(c *BrinNode) {
+	if b.Count==0 {
+		*b = *c
+		return
+	}
+	if b.IRMin>c.IRMin { b.IRMin = c.IRMin }
+	if b.KRMin>c.KRMin { b.KRMin = c.KRMin }
+	if b.IRMax<c.IRMax { b.IRMax = c.IRMax }
+	if b.KRMax<c.KRMax { b.KRMax = c.KRMax }
+	b.Count += c.Count
+}
+
 /* Log2(length/count) */
 func (b BrinNode) FillFactorLog() float64 {
 	i := b.Count
