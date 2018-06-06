@@ -65,6 +65,8 @@ func (s *Ring64) MutateStore(key []byte,m Mutator) bool {
 	return m.Mutate(lo,s.lookup(lo).Value)
 }
 
+var _ IHashRing = (*Ring64)(nil)
+
 type SeedRing64 struct {
 	Ring64
 	Seed uint64

@@ -41,3 +41,8 @@ type Mutator interface{
 	Mutate(hash uint64,obj interface{}) bool
 }
 
+type IHashRing interface{
+	AddNode(u uint64,node interface{})
+	MutateStore(key []byte,m Mutator) bool
+}
+
