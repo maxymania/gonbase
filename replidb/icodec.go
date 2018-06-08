@@ -24,6 +24,7 @@ SOFTWARE.
 package replidb
 
 import "encoding/binary"
+import "sync"
 
 type UIntBuffer [9]byte
 func (u *UIntBuffer) Encode(V uint64) []byte {
@@ -38,6 +39,12 @@ func (u *UIntBuffer) Encode(V uint64) []byte {
 	}
 	b[8] |= 0<<4
 	return b[8:]
+}
+var pUIntBuffer = sync.Pool{New:func()interface{}{ return new(UIntBuffer) }}
+func NewUIntBuffer() *UIntBuffer { return pUIntBuffer.Get().(*UIntBuffer) }
+func (u *UIntBuffer) Free() {
+	if u==nil { return }
+	pUIntBuffer.Put(u)
 }
 
 func Encode(V uint64) []byte {

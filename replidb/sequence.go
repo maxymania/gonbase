@@ -69,8 +69,11 @@ type Sequence struct{
 	
 	Additionally, it allows for multiple possible Transactions to operate
 	concurrently without screwing up the AVL trees.
+	
+	These mutexes are declared in their respective lock-order.
 	*/
-	writable sync.RWMutex
+	bgf sync.Mutex
+	w1,w2 sync.RWMutex
 }
 func (s *Sequence) Init() {
 	s.Exist     = avl.NewWith(PairComparator)
@@ -78,7 +81,8 @@ func (s *Sequence) Init() {
 	s.Seqs      = avl.NewWith(BytesComparator)
 }
 func (s *Sequence) Lowest(name []byte) (uint64,bool) {
-	s.writable.RLock(); defer s.writable.RUnlock()
+	s.w1.RLock(); defer s.w1.RUnlock()
+	s.w2.RLock(); defer s.w2.RUnlock()
 	var us [2]uint64
 	s.DB.View(func(t *bolt.Tx) (_e error) {
 		/*
@@ -112,7 +116,8 @@ func (s *Sequence) Lowest(name []byte) (uint64,bool) {
 	return 0,false
 }
 func (s *Sequence) GetSequence(name []byte) uint64 {
-	s.writable.RLock(); defer s.writable.RUnlock()
+	s.w1.RLock(); defer s.w1.RUnlock()
+	s.w2.RLock(); defer s.w2.RUnlock()
 	if i,ok := s.Seqs.Get(name); ok { return i.(uint64) }
 	var u uint64
 	s.DB.View(func(t *bolt.Tx) (_e error) {
@@ -130,9 +135,11 @@ func (s *Sequence) GetSequence(name []byte) uint64 {
 }
 
 func (s *Sequence) Delete(pair Pair) {
-	s.writable.Lock(); defer s.writable.Unlock()
+	s.w1.Lock(); defer s.w1.Unlock()
 	noaction := true
 	s.DB.View(func(t *bolt.Tx) (_e error) {
+		encoder := NewUIntBuffer()
+		defer encoder.Free()
 		/*
 		Perform bkt := tx[s.Table][name].Free
 		*/
@@ -142,7 +149,7 @@ func (s *Sequence) Delete(pair Pair) {
 		if bkt==nil { return }
 		bkt = bkt.Bucket(iFree)
 		if bkt==nil { return }
-		if len(bkt.Get(Encode(pair.Num)))!=0 { noaction = false }
+		if len(bkt.Get(encoder.Encode(pair.Num)))!=0 { noaction = false }
 		return
 	})
 	s.Exist.Remove(pair)
@@ -152,9 +159,11 @@ func (s *Sequence) Delete(pair Pair) {
 	s.DontExist.Put(pair,pair)
 }
 func (s *Sequence) Create(pair Pair) {
-	s.writable.Lock(); defer s.writable.Unlock()
+	s.w1.Lock(); defer s.w1.Unlock()
 	action := true
 	s.DB.View(func(t *bolt.Tx) (_e error) {
+		encoder := NewUIntBuffer()
+		defer encoder.Free()
 		/*
 		Perform bkt := tx[s.Table][name].Free
 		*/
@@ -164,7 +173,7 @@ func (s *Sequence) Create(pair Pair) {
 		if bkt==nil { return }
 		bkt = bkt.Bucket(iFree)
 		if bkt==nil { return }
-		if len(bkt.Get(Encode(pair.Num)))!=0 { action = false }
+		if len(bkt.Get(encoder.Encode(pair.Num)))!=0 { action = false }
 		return
 	})
 	s.DontExist.Remove(pair)
@@ -175,14 +184,21 @@ func (s *Sequence) Create(pair Pair) {
 }
 func (s *Sequence) SetSequence(pair Pair) {
 	pair.Copy()
-	s.writable.Lock(); defer s.writable.Unlock()
+	s.w1.Lock(); defer s.w1.Unlock()
 	s.Seqs.Put(pair.Name,pair.Num)
 }
 
 /* Background-Flush function. */
 func (s *Sequence) BGFlush() error {
-	var encoder UIntBuffer
+	/* Thwart concurrent access to .BGFlush() */
+	s.bgf.Lock(); defer s.bgf.Unlock()
+	
+	/* Exclude the writers. */
+	s.w1.RLock(); defer s.w1.RUnlock()
+	
 	err := s.DB.Update(func(t *bolt.Tx) (_e error) {
+		encoder := NewUIntBuffer()
+		defer encoder.Free()
 		td,err := t.CreateBucketIfNotExists(s.Table)
 		if err!=nil { return err }
 		
@@ -197,10 +213,10 @@ func (s *Sequence) BGFlush() error {
 		}
 		for n := s.DontExist.Left(); n!=nil ; n = n.Next() {
 			pair := n.Key.(Pair)
-			bkt,err := td.CreateBucketIfNotExists(pair.Name)
-			if err!=nil { return err }
-			bkt,err = bkt.CreateBucketIfNotExists(iFree)
-			if err!=nil { return err }
+			bkt := td.Bucket(pair.Name)
+			if bkt==nil { continue }
+			bkt = bkt.Bucket(iFree)
+			if bkt==nil { continue }
 			err = bkt.Delete(encoder.Encode(pair.Num))
 			if err!=nil { return err }
 		}
@@ -214,7 +230,9 @@ func (s *Sequence) BGFlush() error {
 		return
 	})
 	if err!=nil { return err }
-	s.writable.Lock(); defer s.writable.Unlock()
+	
+	/* Exclude the readers. */
+	s.w2.Lock(); defer s.w2.Unlock()
 	
 	s.Exist.Clear()
 	s.DontExist.Clear()
