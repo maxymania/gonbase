@@ -56,6 +56,7 @@ type LoggedSequence struct{
 	Seq *Sequence
 	Path string
 	
+	/* Replication outbound. */
 	Replicator func(b []byte) error
 	
 	MaxLogBeforeMerge int64
@@ -63,10 +64,31 @@ type LoggedSequence struct{
 	buf bytes.Buffer
 	enc *msgpack.Encoder
 	target *os.File
-	tlock sync.Mutex
+	
+	oplock,tlock sync.Mutex
 	
 	signal chan struct{}
 }
+func (l *LoggedSequence) innerReceive(repl []byte) error {
+	l.oplock.Lock(); defer l.oplock.Unlock()
+	var ev RowEvent
+	dec := msgpack.NewDecoder(bytes.NewBuffer(repl))
+	vev := reflect.ValueOf(&ev)
+	for {
+		if dec.DecodeValue(vev)!=nil { break }
+		l.perform(ev)
+	}
+	l.buf.Write(repl)
+	return nil
+}
+
+/* Replication inbound. */
+func (l *LoggedSequence) OnReceive(repl []byte) error {
+	err := l.innerReceive(repl)
+	if err!=nil { return err }
+	return l.Commit()
+}
+
 func (l *LoggedSequence) loadAndCommit() bool {
 	var ev RowEvent
 	db := filepath.Join(l.Path,pLast)
@@ -77,7 +99,7 @@ func (l *LoggedSequence) loadAndCommit() bool {
 	vev := reflect.ValueOf(&ev)
 	for {
 		if dec.DecodeValue(vev)!=nil { return true }
-		l.Perform(ev)
+		l.perform(ev)
 	}
 }
 func (l *LoggedSequence) startupRecover() bool {
@@ -90,7 +112,7 @@ func (l *LoggedSequence) startupRecover() bool {
 	os.Remove(filepath.Join(l.Path,pLast))
 	return true
 }
-func (l *LoggedSequence) Perform(e RowEvent) {
+func (l *LoggedSequence) perform(e RowEvent) {
 	switch e.Op {
 	case Op_Create: l.Seq.Create(e.Pair)
 	case Op_Delete: l.Seq.Delete(e.Pair)
@@ -98,8 +120,9 @@ func (l *LoggedSequence) Perform(e RowEvent) {
 	}
 }
 func (l *LoggedSequence) client(e RowEvent) {
-	l.enc.Encode(e)
-	l.Perform(e)
+	l.oplock.Lock(); defer l.oplock.Unlock()
+	l.enc.Encode(&e)
+	l.perform(e)
 }
 
 func (l *LoggedSequence) Create(pair Pair) { l.client(RowEvent{pair,Op_Create}) }
@@ -158,6 +181,7 @@ func (l *LoggedSequence) bgWorker() {
 }
 func (l *LoggedSequence) Startup() error {
 	var err2 error
+	l.enc = msgpack.NewEncoder(&l.buf)
 	if !l.startupRecover() { return EStartupRecoverFailed }
 	l.signal = make(chan struct{},1)
 	l.target,err2 = os.Create(filepath.Join(l.Path,pCurrent))
