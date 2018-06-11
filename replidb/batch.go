@@ -35,6 +35,7 @@ type Action struct{
 	Act    uint
 	Name   []byte
 	Number uint64
+	Error  error
 	WG *sync.WaitGroup
 	Free func(a *Action)
 }
@@ -61,9 +62,10 @@ func (sw *SequenceWorker) process(batch []interface{}) {
 			sw.LS.Create(Pair{act.Name,act.Number})
 		}
 	}
-	sw.LS.Commit()
+	err := sw.LS.Commit()
 	for _,elem := range batch {
 		act := elem.(*Action)
+		act.Error = err
 		if act.WG!=nil {
 			act.WG.Done()
 		} else if act.Free!=nil {
