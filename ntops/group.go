@@ -25,6 +25,7 @@ package ntops
 
 import "github.com/maxymania/gonbase/newtree"
 import "github.com/vmihailenco/msgpack"
+import "github.com/byte-mug/golibs/msgpackx"
 import "errors"
 import "sync"
 import "sort"
@@ -41,7 +42,7 @@ type GroupEntry struct{
 	Value   []byte
 }
 func (g *GroupEntry) Marshal() []byte {
-	data,_ := msgpack.Marshal(false,g)
+	data,_ := msgpackx.Marshal(false,g)
 	return data
 }
 func (g *GroupEntry) DecodeMsgpack(src *msgpack.Decoder) error {
@@ -59,7 +60,7 @@ func (g *GroupEntry) DecodeMsgpack(src *msgpack.Decoder) error {
 	//return src.Decode(&g.GroupID,&g.Article,&g.Expires,&g.Value)
 }
 func (g *GroupEntry) EncodeMsgpack(dst *msgpack.Encoder) error {
-	return dst.Encode(g.GroupID,g.Article,g.Expires,g.Value)
+	return dst.EncodeMulti(g.GroupID,g.Article,g.Expires,g.Value)
 }
 
 type groupSumary struct{
@@ -91,7 +92,7 @@ func (g *groupSumary) DecodeMsgpack(src *msgpack.Decoder) error {
 	//return src.Decode(&g.GroupLow,&g.GroupHigh,&g.ArticleLow,&g.ArticleHigh,&g.ExpiresLow,&g.ExpiresHigh,&g.Count)
 }
 func (g *groupSumary) EncodeMsgpack(dst *msgpack.Encoder) error {
-	return dst.Encode(g.GroupLow,g.GroupHigh,g.ArticleLow,g.ArticleHigh,g.ExpiresLow,g.ExpiresHigh,g.Count)
+	return dst.EncodeMulti(g.GroupLow,g.GroupHigh,g.ArticleLow,g.ArticleHigh,g.ExpiresLow,g.ExpiresHigh,g.Count)
 }
 
 type groupGeneral struct{

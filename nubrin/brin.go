@@ -23,7 +23,6 @@ SOFTWARE.
 
 package nubrin
 
-//import "github.com/coreos/bbolt"
 import "github.com/vmihailenco/msgpack"
 import "math"
 
@@ -35,13 +34,13 @@ type BrinNode struct{
 	Count uint64
 }
 func (b *BrinNode) DecodeMsgpack(src *msgpack.Decoder) error {
-	err := src.Decode(&b.IRMin,&b.IRMax,&b.KRMin,&b.KRMax,&b.Count)
+	err := src.DecodeMulti(&b.IRMin,&b.IRMax,&b.KRMin,&b.KRMax,&b.Count)
 	b.IRMax+=b.IRMin
 	b.KRMax+=b.KRMin
 	return err
 }
 func (b *BrinNode) EncodeMsgpack(dst *msgpack.Encoder) error {
-	return dst.Encode(b.IRMin,b.IRMax-b.IRMin,b.KRMin,b.KRMax-b.KRMin,b.Count)
+	return dst.EncodeMulti(b.IRMin,b.IRMax-b.IRMin,b.KRMin,b.KRMax-b.KRMin,b.Count)
 }
 func (b *BrinNode) Single(I,K uint64) {
 	b.IRMin = I

@@ -49,8 +49,8 @@ type RowEvent struct{
 	Pair
 	Op uint
 }
-func (r *RowEvent) DecodeMsgpack(dec *msgpack.Decoder) error { return dec.Decode(&r.Op,&r.Pair.Name,&r.Pair.Num) }
-func (r *RowEvent) EncodeMsgpack(enc *msgpack.Encoder) error { return enc.Encode( r.Op, r.Pair.Name, r.Pair.Num) }
+func (r *RowEvent) DecodeMsgpack(dec *msgpack.Decoder) error { return dec.DecodeMulti(&r.Op,&r.Pair.Name,&r.Pair.Num) }
+func (r *RowEvent) EncodeMsgpack(enc *msgpack.Encoder) error { return enc.EncodeMulti( r.Op, r.Pair.Name, r.Pair.Num) }
 
 type LoggedSequence struct{
 	Seq *Sequence

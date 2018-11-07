@@ -25,6 +25,7 @@ package nubrin
 
 import bolt "github.com/coreos/bbolt"
 import "github.com/vmihailenco/msgpack"
+import "github.com/byte-mug/golibs/msgpackx"
 import "context"
 import "sort"
 
@@ -334,7 +335,7 @@ func (t *TSIndex) DeleteExpire(ctx context.Context,now uint64,consumer func([]by
 			/*
 			...otherwise, we will write the Page back.
 			*/
-			data,err := msgpack.Marshal(v,&page)
+			data,err := msgpackx.Marshal(v,&page)
 			if err!=nil { return err }
 			err = t.Index.Put(append(lcbuf,k...),data)
 			if err!=nil { return err }
